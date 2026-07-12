@@ -90,10 +90,10 @@ echo "  (also saved to $LOG_DIR/stream_url.txt)"
 echo "=============================================================="
 echo ""
 
-# --- 4. launch Isaac Sim streaming (foreground) -----------------------------------
+# --- 4. launch Isaac Sim streaming (detached, survives terminal disconnect) -------
 # Belt and braces: besides the extension.toml patch done by turn_bridge.sh, force
 # the TURN relay into the runtime settings via CLI. /streaming/ice-servers serves
-# whatever lives under /exts/omni.services.streamclient.webrtc/iceServers.
+# whatever lives under /exts/omni.services.streamclient.webrtc/ice_servers.
 TURN_PASS="$(cat "${SECRET_FILE:-/workspace/.turn_secret}")"
 ICE_ARGS=(
     "--/exts/omni.services.streamclient.webrtc/ice_servers/0/urls/0=turn:${TURN_PUBLIC_IP}:${TURN_PUBLIC_PORT}?transport=tcp"
@@ -101,14 +101,35 @@ ICE_ARGS=(
     "--/exts/omni.services.streamclient.webrtc/ice_servers/0/credential=${TURN_PASS}"
 )
 
+# Only ONE WebRTC Isaac Sim may run — extra instances fight for the GPU and can
+# stop the streamed viewport/UI from compositing (pure-black screen). Kill any
+# previous WebRTC instance this bridge started before launching a fresh one.
+if pgrep -f 'omni.isaac.sim.headless.webrtc.kit' >/dev/null 2>&1; then
+    log "Stopping previous WebRTC Isaac Sim instance(s)..."
+    pkill -f 'omni.isaac.sim.headless.webrtc.kit' 2>/dev/null || true
+    sleep 3
+fi
+
+ISAAC_LOG="$LOG_DIR/isaac-sim.log"
 cd "$ISAAC_ROOT"
 if [[ -x ./runheadless.webrtc.sh ]]; then
-    exec ./runheadless.webrtc.sh -v "${ICE_ARGS[@]}"     # Isaac Sim <= 4.2 containers
+    LAUNCH=(./runheadless.webrtc.sh -v "${ICE_ARGS[@]}")     # Isaac Sim <= 4.2 containers
 elif [[ -x ./runheadless.sh ]]; then
-    exec ./runheadless.sh -v "${ICE_ARGS[@]}"            # Isaac Sim 4.5/5.x containers
+    LAUNCH=(./runheadless.sh -v "${ICE_ARGS[@]}")            # Isaac Sim 4.5/5.x containers
 elif [[ -x ./isaac-sim.streaming.sh ]]; then
-    exec ./isaac-sim.streaming.sh "${ICE_ARGS[@]}"
+    LAUNCH=(./isaac-sim.streaming.sh "${ICE_ARGS[@]}")
 else
     log "WARNING: no runheadless script found in $ISAAC_ROOT."
     log "Bridge is up — start Isaac Sim streaming manually, then open the URL above."
+    exit 0
 fi
+
+# setsid + nohup detaches from the controlling terminal so a dropped web/SSH
+# terminal (SIGHUP) no longer kills Isaac Sim and the stream survives.
+setsid nohup "${LAUNCH[@]}" >"$ISAAC_LOG" 2>&1 &
+echo $! > "$LOG_DIR/isaac.pid"
+disown 2>/dev/null || true
+
+log "Isaac Sim launched DETACHED (pid $(cat "$LOG_DIR/isaac.pid")); it keeps running"
+log "after you close this terminal. Live log: tail -f $ISAAC_LOG"
+log "Wait ~1-2 min for 'Isaac Sim ... App is loaded', then open the URL above."
