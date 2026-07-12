@@ -1,119 +1,120 @@
-# Isaac Sim on RunPod — fixing the blank/gray live stream
+# Isaac Sim on RunPod — working browser access (noVNC)
 
-UDP-to-TCP bridge so the Isaac Sim WebRTC live stream works through RunPod's
-TCP-only networking. Tested target: `nvcr.io/nvidia/isaac-sim:4.0.0`.
+Run NVIDIA Isaac Sim on a RunPod pod and use its **full GUI in your browser**.
+Works on **all Isaac Sim versions** (4.0 → 5.x). No UDP, no WebRTC, no ICE, no
+TURN, no Direct-TCP ports.
 
-## Root cause (30 seconds)
-
-Isaac Sim streams with **WebRTC**:
-
-| Traffic | Protocol | Through RunPod HTTP proxy (80/8080/8211)? |
-|---|---|---|
-| Client web page + signaling | TCP / HTTP / WebSocket | ✅ works — that's why the page loads |
-| Video/audio media (SRTP) | **UDP 47998** (+ neighbors) | ❌ RunPod forwards **no inbound UDP at all** |
-
-So the browser negotiates a session, then never receives a frame → gray canvas, dead clicks.
-
-A raw `socat` UDP→TCP wrap can't fix it: the receiving end is your *browser's*
-WebRTC stack, which only speaks ICE/DTLS/SRTP. The standards-compliant way to
-force WebRTC media over TCP is a **TURN relay** with `?transport=tcp` — that is
-what this repo sets up:
-
-```
-browser ⇄ TCP ⇄ RunPod Direct-TCP port ⇄ coturn (in pod) ⇄ UDP (pod-internal) ⇄ Isaac Sim
-```
+> **Status:** ✅ noVNC is the working, supported method.
+> The WebRTC/TURN approach (`turn_bridge.sh`, `start_all.sh`) is kept only as a
+> reference for what was tried — see [POSTMORTEM.md](POSTMORTEM.md). Don't start there.
 
 ## Quick start
 
-### 1. One-time pod setup
-
-RunPod console → your Pod → **Edit Pod** → *Expose TCP Ports* → set to
-`3478,8211,49100` → save (pod restarts). RunPod injects `RUNPOD_PUBLIC_IP` and
-`RUNPOD_TCP_PORT_3478/_8211/_49100` into the container — the scripts
-auto-detect them, you never type an IP.
-
-| Port | Role |
-|---|---|
-| 3478 | TURN relay — carries the UDP media over TCP |
-| 8211 | Web player page, served plain-http over Direct TCP (an https page would be blocked from calling the plain-http signaling endpoint — mixed content) |
-| 49100 | WebRTC signaling; `kit-player.js` hardcodes `:49100`, so `turn_bridge.sh` rewrites it to the mapped external port |
-
-### 2. Run
-
-In the pod web terminal (or SSH):
-
 ```bash
+# on the pod (SSH is more reliable than the web terminal)
 cd /workspace
 git clone https://github.com/Sa3d-99/runpod_udp_to_tcp.git
 cd runpod_udp_to_tcp && chmod +x *.sh
-./start_all.sh
+bash novnc.sh
 ```
 
-`start_all.sh` does everything: installs dependencies (`install.sh`: git,
-python3, coturn, iproute2), starts the coturn TURN relay supervised in the
-background, patches the Isaac Sim WebRTC extension's `iceServers` (backup kept
-as `extension.toml.bak`), prints your stream URL, launches
-`runheadless.webrtc.sh`.
-
-### 3. Open the stream
-
-Wait for Isaac Sim to finish loading, then open the printed URL in
-**Chrome/Chromium** (Firefox unreliable per NVIDIA docs):
+Open the URL it prints:
 
 ```
-http://<PUBLIC_IP>:<mapped 8211 port>/streaming/webrtc-demo/?server=<PUBLIC_IP>
+https://<POD_ID>-8080.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote
 ```
 
-Also saved to `/workspace/stream-bridge-logs/stream_url.txt` (`cat` it any time).
-Press the red **▷** play button once it becomes enabled.
+(also saved to `/workspace/novnc-logs/novnc_url.txt`)
 
-Do **not** use the RunPod https proxy URL (`…proxy.runpod.net`): the
-`/streaming/webrtc-client` path 307-redirects to the pod's internal IP
-(unreachable), and an https page cannot call the plain-http signaling port
-(mixed content) — both dead ends we hit while debugging.
+Isaac Sim's GUI appears on the desktop after 1–2 minutes. Load your scene with
+**File → Open**. Mouse and keyboard work normally.
 
-## Fully automatic on pod boot
+Requirements: port **8080** exposed as an **HTTP** port (default on the Isaac
+images). Nothing else to configure — no Direct TCP ports, no TURN, no port
+mapping to copy.
+
+## Why this works when Isaac's own streaming doesn't
+
+| | Isaac WebRTC / native streaming | noVNC (this repo) |
+|---|---|---|
+| Transport | **UDP** (SRTP media) + ICE | **TCP** (HTTP + WebSocket) |
+| RunPod support | ❌ no inbound UDP at all | ✅ exactly what the HTTP proxy carries |
+| Needs reachable public IPs | ✅ (Isaac only advertises `127.0.0.1`, `172.18.0.2`) | ❌ irrelevant |
+| Ports to expose | 3+ Direct TCP ports, remapped on every restart | 1 HTTP port (already there) |
+| Isaac version differences | config keys move/disappear across 4.0/4.2/5.x | ❌ none — Isaac isn't modified |
+
+**The mechanism:**
+
+```
+Isaac Sim GUI  →  renders into a virtual X screen (Xvfb, on the GPU)
+                       ↓
+                  x11vnc  exposes that screen as VNC on localhost:5900
+                       ↓
+              websockify + noVNC  serve it as a web page on :8080
+                       ↓
+        RunPod HTTP proxy (TCP)  →  your browser
+```
+
+Isaac Sim never streams anything itself. We just capture the desktop it draws
+and ship the pixels over HTTP — the one thing RunPod's network does well.
+
+## Automatic on pod boot
 
 RunPod console → Edit Pod → **Container Start Command**:
 
 ```bash
-bash -c "command -v git >/dev/null || (apt-get update && apt-get install -y git); cd /workspace && (test -d runpod_udp_to_tcp || git clone https://github.com/Sa3d-99/runpod_udp_to_tcp.git) && cd runpod_udp_to_tcp && chmod +x *.sh && ./start_all.sh"
+bash -c "command -v git >/dev/null || (apt-get update && apt-get install -y git); cd /workspace && (test -d runpod_udp_to_tcp || git clone https://github.com/Sa3d-99/runpod_udp_to_tcp.git) && cd runpod_udp_to_tcp && chmod +x *.sh && bash novnc.sh && sleep infinity"
 ```
 
-Installs git if the image lacks it, clones on first boot, reuses on later boots
-(`/workspace` is the persistent volume), then runs everything.
+Clones on first boot, reuses after (`/workspace` is the persistent volume), then
+brings the desktop up. Pod start = browser-ready Isaac Sim.
 
-## Verify / troubleshoot
+## Options
 
-- `env | grep RUNPOD_TCP_PORT` → must show all three: `_3478`, `_8211`, `_49100`.
-- Signaling patch applied:
-  `grep -c "$RUNPOD_TCP_PORT_49100" $(find /isaac-sim -path '*streamclient.webrtc*' -name kit-player.js)` → non-zero.
-- ICE config served (run inside pod once Isaac Sim is loaded):
-  `curl -s http://localhost:8211/streaming/ice-servers` → JSON containing your `turn:` URL.
-- Signaling port open: `ss -ltn | grep 49100` → LISTEN.
-- `ss -ltn | grep 3478` → coturn listening.
-- `tail -f /workspace/stream-bridge-logs/coturn.log` → `allocation` lines appear
-  when the browser connects.
-- Chrome `chrome://webrtc-internals` → the succeeded candidate pair must show
-  type `relay`, and the peer connection config must list your `turn:` URL.
-- `env | grep -E 'RUNPOD_PUBLIC_IP|RUNPOD_TCP_PORT'` → both must exist; if
-  `RUNPOD_TCP_PORT_3478` is missing, step 1 was not done.
-- Isaac Sim UDP media ports: `ss -lunp | grep -i kit`.
-- Config patch applied:
-  `grep -r iceServers /isaac-sim/extscache/*streamclient.webrtc*/config/extension.toml`
+```bash
+WEB_PORT=8080          # HTTP port noVNC is served on (must be exposed as HTTP)
+RES=1920x1080          # virtual screen resolution
+VNC_PASSWORD=secret    # add a VNC password (default: none — pod is private)
+NO_ISAAC=1             # bring up the desktop only, launch Isaac yourself
+ISAAC_ROOT=/isaac-sim  # where Isaac lives
+```
+
+Example: `RES=2560x1440 VNC_PASSWORD=hunter2 bash novnc.sh`
+
+## Troubleshooting
+
+Everything is detached (`setsid`) — SSH/terminal drops will **not** kill it.
+
+```bash
+# is the whole stack up?
+ss -ltn | grep -E ':(5900|8080) '        # VNC + noVNC listening
+pgrep -af 'Xvfb|x11vnc|websockify'       # display + VNC + web
+tail -20 /workspace/novnc-logs/isaac-gui.log
+```
+
+| Symptom | Cause / fix |
+|---|---|
+| noVNC page loads, grey/empty desktop | Isaac still starting (1–2 min). Check `isaac-gui.log`. |
+| Page won't load at all | 8080 not exposed as HTTP in the pod config, or websockify died — see `websockify.log`. |
+| Isaac window never appears | Look for a Vulkan/GL error in `isaac-gui.log` — the GPU couldn't present to the virtual display. |
+| Everything died after a restart | Just re-run `bash novnc.sh` — it's idempotent and cleans up its own previous run. |
+
+**Never** kill the Isaac process that the container itself started
+(`omni.isaac.sim.headless.*.kit`, usually PID ~54). On the RunPod image it is the
+container's **main process** — killing it stops the whole container (SSH, your
+work, everything). `novnc.sh` only ever touches the desktop stack and the GUI
+instance it launched itself.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `start_all.sh` | One command: deps + bridge + Isaac Sim + prints URL |
-| `turn_bridge.sh` | Installs/configures/supervises coturn, patches `iceServers` |
-| `install.sh` | apt dependencies (git, python3, coturn, iproute2), idempotent |
-| `requirements.txt` | pip dependencies (currently none — stdlib only) |
+| `novnc.sh` | **The method.** Desktop + VNC + noVNC + Isaac GUI. Run this. |
+| `POSTMORTEM.md` | Every approach tried, why each failed, and why noVNC won. |
+| `turn_bridge.sh`, `start_all.sh`, `install.sh` | Legacy WebRTC/TURN attempt. Kept for reference only — see the postmortem. |
 
-## Security note
+## Security
 
-Isaac Sim's streaming endpoints have **no authentication or encryption**. The
-TURN relay is credential-protected (random secret in `/workspace/.turn_secret`),
-but the 8211 signaling endpoint behind the RunPod proxy is reachable by anyone
-with the URL. Don't leave it running unattended longer than needed.
+The noVNC endpoint has **no authentication by default** — anyone with the URL
+can view and control the sim. Set `VNC_PASSWORD=...` if the pod URL might be
+shared, and stop the pod when you're not using it.
