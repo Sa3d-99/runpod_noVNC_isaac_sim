@@ -185,10 +185,14 @@ PYEOF
     log "Restart Isaac Sim for the patch to take effect."
 fi
 
-# --- 5b. patch the web client so signaling uses the RunPod-mapped port ----------
-# The stock kit-player.js hardcodes signaling to <server>:49100. RunPod's Direct
-# TCP mapping gives 49100 a different external port, so rewrite the constant.
-# Idempotent: always regenerates from the pristine .orig copy.
+# --- 5b. patch the web client: signaling port + force relay-only ICE ------------
+# Two edits to the stock kit-player.js, both regenerated from the pristine .orig:
+#  1. It hardcodes signaling to <server>:49100; RunPod maps 49100 to a different
+#     external port, so rewrite the constant.
+#  2. Its RTCPeerConnection omits iceTransportPolicy, so the browser tries the
+#     server's private candidates (127.0.0.1 / 172.18.0.2, unreachable) and never
+#     routes media through our TURN relay -> no video, "stream timed out". Forcing
+#     iceTransportPolicy:"relay" makes the browser relay all media via coturn.
 KIT_PLAYER="$(find "$ISAAC_ROOT" -path '*streamclient.webrtc*' -name 'kit-player.js' 2>/dev/null | head -1 || true)"
 if [[ -z "${SIGNALING_PUBLIC_PORT:-}" ]]; then
     log "NOTE: SIGNALING_PUBLIC_PORT not set — skipping kit-player.js signaling patch."
@@ -196,8 +200,10 @@ elif [[ -z "$KIT_PLAYER" ]]; then
     log "WARNING: kit-player.js not found under $ISAAC_ROOT — cannot patch signaling port."
 else
     cp -n "$KIT_PLAYER" "${KIT_PLAYER}.orig" || true
-    sed "s/49100/${SIGNALING_PUBLIC_PORT}/g" "${KIT_PLAYER}.orig" > "$KIT_PLAYER"
-    log "Patched web client signaling port: 49100 -> ${SIGNALING_PUBLIC_PORT}"
+    sed -e "s/49100/${SIGNALING_PUBLIC_PORT}/g" \
+        -e 's/const h={iceServers:this.iceServers}/const h={iceServers:this.iceServers,iceTransportPolicy:"relay"}/g' \
+        "${KIT_PLAYER}.orig" > "$KIT_PLAYER"
+    log "Patched web client: signaling 49100 -> ${SIGNALING_PUBLIC_PORT}, forced relay-only ICE"
 fi
 
 # --- 6. run coturn supervised in the background --------------------------------
