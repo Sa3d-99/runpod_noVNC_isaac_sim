@@ -96,9 +96,9 @@ echo ""
 # whatever lives under /exts/omni.services.streamclient.webrtc/iceServers.
 TURN_PASS="$(cat "${SECRET_FILE:-/workspace/.turn_secret}")"
 ICE_ARGS=(
-    "--/exts/omni.services.streamclient.webrtc/iceServers/0/urls/0=turn:${TURN_PUBLIC_IP}:${TURN_PUBLIC_PORT}?transport=tcp"
-    "--/exts/omni.services.streamclient.webrtc/iceServers/0/username=isaac"
-    "--/exts/omni.services.streamclient.webrtc/iceServers/0/credential=${TURN_PASS}"
+    "--/exts/omni.services.streamclient.webrtc/ice_servers/0/urls/0=turn:${TURN_PUBLIC_IP}:${TURN_PUBLIC_PORT}?transport=tcp"
+    "--/exts/omni.services.streamclient.webrtc/ice_servers/0/username=isaac"
+    "--/exts/omni.services.streamclient.webrtc/ice_servers/0/credential=${TURN_PASS}"
 )
 
 cd "$ISAAC_ROOT"

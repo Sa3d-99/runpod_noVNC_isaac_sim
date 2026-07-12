@@ -130,7 +130,7 @@ pw = os.environ["TURN_PASS"]
 
 server = f'{{ urls = ["{url}"], username = "{user}", credential = "{pw}" }}'
 aot_block = (
-    '[[settings.exts."omni.services.streamclient.webrtc".iceServers]]\n'
+    '[[settings.exts."omni.services.streamclient.webrtc".ice_servers]]\n'
     f'urls = ["{url}"]\n'
     f'username = "{user}"\n'
     f'credential = "{pw}"\n'
@@ -140,7 +140,7 @@ text = open(path).read()
 # NVIDIA declares the defaults as TOML array-of-tables:
 #   [[settings.exts."...".iceServers]]  — handle that form first, then the
 # inline list form, then append a fresh block if nothing exists.
-aot_hdr = re.compile(r'^\[\[[^\]]*iceServers\]\]\s*$', re.M)
+aot_hdr = re.compile(r'^\[\[[^\]]*ice_?[sS]ervers\]\]\s*$', re.M)
 key_pat = re.compile(r'^(\s*(?:exts\."[^"]+"\.)?)iceServers\s*=\s*\[', re.M)
 
 if aot_hdr.search(text):
@@ -171,7 +171,7 @@ elif key_pat.search(text):
                 break
     if end < 0:
         raise SystemExit(f"[turn-bridge] ERROR: unbalanced iceServers list in {path}")
-    entry = f"{m.group(1)}iceServers = [ {server} ]"
+    entry = f"{m.group(1)}ice_servers = [ {server} ]"
     text = text[: m.start()] + entry + text[end:]
 else:
     text += "\n" + aot_block
