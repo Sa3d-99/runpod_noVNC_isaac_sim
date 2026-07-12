@@ -101,12 +101,19 @@ ICE_ARGS=(
     "--/exts/omni.services.streamclient.webrtc/ice_servers/0/credential=${TURN_PASS}"
 )
 
-# Only ONE WebRTC Isaac Sim may run — extra instances fight for the GPU and can
-# stop the streamed viewport/UI from compositing (pure-black screen). Kill any
-# previous WebRTC instance this bridge started before launching a fresh one.
-if pgrep -f 'omni.isaac.sim.headless.webrtc.kit' >/dev/null 2>&1; then
-    log "Stopping previous WebRTC Isaac Sim instance(s)..."
+# Only ONE Isaac Sim may run. Extra instances fight for the GPU's NVENC encoder;
+# a second instance then can't start its encoder and the stream times out before
+# it begins (error 0xC0F22219). The RunPod image auto-starts a NATIVE-streaming
+# Isaac (unusable here — it needs UDP); kill it plus any stale WebRTC instance.
+# Isaac ignores SIGTERM, so escalate to SIGKILL (-9).
+if pgrep -f 'omni.isaac.sim.headless.\(webrtc\|native\).kit' >/dev/null 2>&1; then
+    log "Stopping other Isaac Sim instance(s) (native auto-start + any stale WebRTC)..."
+    pkill -f 'omni.isaac.sim.headless.native.kit' 2>/dev/null || true
     pkill -f 'omni.isaac.sim.headless.webrtc.kit' 2>/dev/null || true
+    sleep 3
+    # anything still alive after SIGTERM gets SIGKILL
+    pkill -9 -f 'omni.isaac.sim.headless.native.kit' 2>/dev/null || true
+    pkill -9 -f 'omni.isaac.sim.headless.webrtc.kit' 2>/dev/null || true
     sleep 3
 fi
 

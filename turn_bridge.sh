@@ -212,15 +212,17 @@ if [[ -f "$LOG_DIR/supervisor.pid" ]] && kill -0 "$(cat "$LOG_DIR/supervisor.pid
     done
 fi
 
-nohup bash -c "
+# setsid detaches into a new session so a dropped web/SSH terminal (which kills
+# its whole process group) can't take coturn down with it.
+setsid bash -c "
     while true; do
         turnserver -c '$CONF' --no-stdout-log >>'$LOG_DIR/supervisor.log' 2>&1
         echo \"[turn-bridge] coturn exited, restarting in 2s\" >>'$LOG_DIR/supervisor.log'
         sleep 2
     done
-" >/dev/null 2>&1 &
+" </dev/null >/dev/null 2>&1 &
 echo $! > "$LOG_DIR/supervisor.pid"
-disown
+disown 2>/dev/null || true
 
 # give coturn up to 15s to bind (restarts can race the old instance's teardown)
 LISTENING=""
