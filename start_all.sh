@@ -91,13 +91,23 @@ echo "=============================================================="
 echo ""
 
 # --- 4. launch Isaac Sim streaming (foreground) -----------------------------------
+# Belt and braces: besides the extension.toml patch done by turn_bridge.sh, force
+# the TURN relay into the runtime settings via CLI. /streaming/ice-servers serves
+# whatever lives under /exts/omni.services.streamclient.webrtc/iceServers.
+TURN_PASS="$(cat "${SECRET_FILE:-/workspace/.turn_secret}")"
+ICE_ARGS=(
+    "--/exts/omni.services.streamclient.webrtc/iceServers/0/urls/0=turn:${TURN_PUBLIC_IP}:${TURN_PUBLIC_PORT}?transport=tcp"
+    "--/exts/omni.services.streamclient.webrtc/iceServers/0/username=isaac"
+    "--/exts/omni.services.streamclient.webrtc/iceServers/0/credential=${TURN_PASS}"
+)
+
 cd "$ISAAC_ROOT"
 if [[ -x ./runheadless.webrtc.sh ]]; then
-    exec ./runheadless.webrtc.sh -v          # Isaac Sim <= 4.2 containers
+    exec ./runheadless.webrtc.sh -v "${ICE_ARGS[@]}"     # Isaac Sim <= 4.2 containers
 elif [[ -x ./runheadless.sh ]]; then
-    exec ./runheadless.sh -v                 # Isaac Sim 4.5/5.x containers
+    exec ./runheadless.sh -v "${ICE_ARGS[@]}"            # Isaac Sim 4.5/5.x containers
 elif [[ -x ./isaac-sim.streaming.sh ]]; then
-    exec ./isaac-sim.streaming.sh
+    exec ./isaac-sim.streaming.sh "${ICE_ARGS[@]}"
 else
     log "WARNING: no runheadless script found in $ISAAC_ROOT."
     log "Bridge is up — start Isaac Sim streaming manually, then open the URL above."

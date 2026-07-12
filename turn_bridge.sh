@@ -111,7 +111,13 @@ if [[ -z "$EXT_TOML" ]]; then
     log "         If you run Isaac Sim 5.x this is expected — TURN config was removed by NVIDIA."
     log "         Otherwise set ISAAC_ROOT and re-run."
 else
-    cp -n "$EXT_TOML" "${EXT_TOML}.bak" || true
+    # Idempotent: keep a pristine backup on first run, then always regenerate
+    # the patched file from it (repeat runs must not accumulate edits).
+    if [[ -f "${EXT_TOML}.bak" ]]; then
+        cp "${EXT_TOML}.bak" "$EXT_TOML"
+    else
+        cp "$EXT_TOML" "${EXT_TOML}.bak"
+    fi
     TURN_URL="turn:${TURN_PUBLIC_IP}:${TURN_PUBLIC_PORT}?transport=tcp" \
     TURN_USER="$TURN_USER" TURN_PASS="$TURN_PASS" EXT_TOML="$EXT_TOML" \
     python3 - <<'PYEOF'
@@ -123,16 +129,37 @@ user = os.environ["TURN_USER"]
 pw = os.environ["TURN_PASS"]
 
 server = f'{{ urls = ["{url}"], username = "{user}", credential = "{pw}" }}'
+aot_block = (
+    '[[settings.exts."omni.services.streamclient.webrtc".iceServers]]\n'
+    f'urls = ["{url}"]\n'
+    f'username = "{user}"\n'
+    f'credential = "{pw}"\n'
+)
 text = open(path).read()
 
-# 1) Replace an existing iceServers assignment (single- or multi-line list),
-#    matching the closing bracket by depth so nested lists survive.
-# 2) Else insert a dotted key right after the [settings] header, matching the
-#    file's existing style so the TOML stays valid.
-# 3) Else append a fresh [settings] section.
+# NVIDIA declares the defaults as TOML array-of-tables:
+#   [[settings.exts."...".iceServers]]  — handle that form first, then the
+# inline list form, then append a fresh block if nothing exists.
+aot_hdr = re.compile(r'^\[\[[^\]]*iceServers\]\]\s*$', re.M)
 key_pat = re.compile(r'^(\s*(?:exts\."[^"]+"\.)?)iceServers\s*=\s*\[', re.M)
-m = key_pat.search(text)
-if m:
+
+if aot_hdr.search(text):
+    # Remove every [[...iceServers]] block (header up to the next table header
+    # or EOF), then append exactly one block pointing at our TURN relay.
+    lines = text.split("\n")
+    out, skipping = [], False
+    for line in lines:
+        if aot_hdr.match(line):
+            skipping = True
+            continue
+        if skipping and line.startswith("["):
+            skipping = False
+        if not skipping:
+            out.append(line)
+    text = "\n".join(out).rstrip("\n") + "\n\n" + aot_block
+    entry = aot_block.strip().replace("\n", " ")
+elif key_pat.search(text):
+    m = key_pat.search(text)
     depth, end = 0, -1
     for i in range(m.end() - 1, len(text)):
         if text[i] == "[":
@@ -147,12 +174,8 @@ if m:
     entry = f"{m.group(1)}iceServers = [ {server} ]"
     text = text[: m.start()] + entry + text[end:]
 else:
-    entry = f'exts."omni.services.streamclient.webrtc".iceServers = [ {server} ]'
-    settings_hdr = re.compile(r"^\[settings\]\s*$", re.M)
-    if settings_hdr.search(text):
-        text = settings_hdr.sub("[settings]\n" + entry, text, count=1)
-    else:
-        text += "\n[settings]\n" + entry + "\n"
+    text += "\n" + aot_block
+    entry = aot_block.strip().replace("\n", " ")
 open(path, "w").write(text)
 print(f"[turn-bridge] patched {path}:")
 print(f"[turn-bridge]   {entry.replace(pw, '****')}")
