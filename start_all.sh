@@ -101,20 +101,17 @@ ICE_ARGS=(
     "--/exts/omni.services.streamclient.webrtc/ice_servers/0/credential=${TURN_PASS}"
 )
 
-# Only ONE Isaac Sim may run. Extra instances fight for the GPU's NVENC encoder;
-# a second instance then can't start its encoder and the stream times out before
-# it begins (error 0xC0F22219). The RunPod image auto-starts a NATIVE-streaming
-# Isaac (unusable here — it needs UDP); kill it plus any stale WebRTC instance.
-# Isaac ignores SIGTERM, so escalate to SIGKILL (-9).
-if pgrep -f 'omni.isaac.sim.headless.\(webrtc\|native\).kit' >/dev/null 2>&1; then
-    log "Stopping other Isaac Sim instance(s) (native auto-start + any stale WebRTC)..."
-    pkill -f 'omni.isaac.sim.headless.native.kit' 2>/dev/null || true
+# Kill only STALE WebRTC instances this bridge previously started, so we don't
+# pile up duplicates. NEVER touch omni.isaac.sim.headless.native.kit — on the
+# RunPod image that native instance is the container's MAIN process (docker-init
+# runs it); killing it stops the whole container (SSH, bridge, everything dies).
+# The native and WebRTC instances coexist fine — sessions connect with both up.
+if pgrep -f 'omni.isaac.sim.headless.webrtc.kit' >/dev/null 2>&1; then
+    log "Stopping previous WebRTC Isaac Sim instance(s) (leaving native/container alone)..."
     pkill -f 'omni.isaac.sim.headless.webrtc.kit' 2>/dev/null || true
     sleep 3
-    # anything still alive after SIGTERM gets SIGKILL
-    pkill -9 -f 'omni.isaac.sim.headless.native.kit' 2>/dev/null || true
     pkill -9 -f 'omni.isaac.sim.headless.webrtc.kit' 2>/dev/null || true
-    sleep 3
+    sleep 2
 fi
 
 ISAAC_LOG="$LOG_DIR/isaac-sim.log"
