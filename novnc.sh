@@ -40,6 +40,23 @@ mkdir -p "$LOG_DIR"
 log() { echo "[novnc] $*"; }
 die() { echo "[novnc] ERROR: $*" >&2; exit 1; }
 
+# Is a TCP port accepting connections on localhost? Pure bash — deliberately does
+# NOT use `ss`/`netstat`, which are not installed on the Isaac images.
+port_open() {
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && { exec 3<&-; exec 3>&-; return 0; }
+    return 1
+}
+
+# Wait up to N seconds for a port to come up.
+wait_port() {
+    local port="$1" secs="${2:-15}"
+    for _ in $(seq 1 "$secs"); do
+        port_open "$port" && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # --- 1. dependencies (git, python3, Xvfb, x11vnc, fluxbox, noVNC, websockify) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/install.sh" ]]; then
@@ -56,7 +73,7 @@ else
         $SUDO apt-get update -qq
         $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             git python3 python3-pip xvfb x11vnc fluxbox novnc websockify \
-            x11-utils ca-certificates >/dev/null
+            x11-utils iproute2 ca-certificates >/dev/null
     fi
 fi
 
@@ -103,16 +120,18 @@ setsid x11vnc -display "$DISPLAY_NUM" -forever -shared "${AUTH[@]}" \
     -rfbport "$VNC_PORT" -localhost -noxdamage \
     </dev/null >"$LOG_DIR/x11vnc.log" 2>&1 &
 sleep 2
-ss -ltn 2>/dev/null | grep -q ":${VNC_PORT} " \
+wait_port "$VNC_PORT" 15 \
     || die "x11vnc failed to bind :${VNC_PORT} — see $LOG_DIR/x11vnc.log"
+log "VNC server up."
 
 # --- 5. noVNC web front-end (HTTP + WebSocket, rides RunPod's HTTP proxy) -------
 log "Starting noVNC web server on :${WEB_PORT}..."
 setsid websockify --web=/usr/share/novnc "$WEB_PORT" "localhost:${VNC_PORT}" \
     </dev/null >"$LOG_DIR/websockify.log" 2>&1 &
 sleep 2
-ss -ltn 2>/dev/null | grep -q ":${WEB_PORT} " \
+wait_port "$WEB_PORT" 15 \
     || die "websockify failed to bind :${WEB_PORT} — see $LOG_DIR/websockify.log"
+log "noVNC web server up."
 
 # --- 6. launch the Isaac Sim GUI on the virtual display -------------------------
 # Launcher name differs across versions, so probe for whichever exists:

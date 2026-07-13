@@ -61,7 +61,7 @@ else
         python3 python3-pip \
         xvfb x11vnc fluxbox \
         novnc websockify \
-        x11-utils \
+        x11-utils iproute2 \
         ca-certificates >/dev/null
     log "System packages installed."
 fi
