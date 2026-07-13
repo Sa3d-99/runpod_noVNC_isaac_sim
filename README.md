@@ -6,35 +6,41 @@ TURN, no Direct-TCP ports — one HTTP port and you're done.
 
 One script. One command. That's the whole repo.
 
-## Quick start — one command, nothing pre-installed
+## Easiest way — deploy the ready-made template
 
-A fresh RunPod Isaac pod has **no git**, and often runs as the unprivileged
-`isaac-sim` user. So don't clone — bootstrap:
+A RunPod template is already set up with everything below. **Nothing to install,
+nothing to configure.**
+
+1. In RunPod, go to **Templates** and search for **`Isaac Sim noVNC`**
+   *(by Sa3d-99)*.
+2. Pick a GPU — **RTX 4090**, **RTX 5080**, or **RTX 5090** recommended.
+3. **Deploy.** Wait ~2–3 minutes.
+4. **Connect → HTTP Service → port 8080.**
+
+The Isaac Sim desktop opens in your browser. Load your scene with
+**File → Open**. Done.
+
+> Setting up your own template instead? The exact settings are in
+> [TEMPLATE.md](TEMPLATE.md).
+
+## Manual install — one command, nothing pre-installed
+
+If you're on your own pod rather than the template:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sa3d-99/runpod_noVNC_isaac_sim/main/bootstrap.sh | bash
 ```
 
-That downloads the repo (no git needed), installs every dependency (using `sudo`
-automatically if you're not root), starts the desktop, launches Isaac Sim, and
-**prints your real URL** — no placeholder to fill in.
+Downloads the repo (no git needed), installs every dependency, starts the
+desktop, launches Isaac Sim, and **prints your real URL** — no placeholder to
+fill in. It's also saved to `/workspace/novnc-logs/novnc_url.txt`.
 
-Then open the printed link. It looks like:
+**Requirements:** port **8080** exposed as an **HTTP** port, and an Isaac image
+that runs as **root** — use `nvcr.io/nvidia/isaac-sim:4.0.0`. Isaac 5.x/6.x
+images run as an unprivileged user with no sudo and a read-only `/usr`, so
+nothing can be installed there and the desktop can't start.
 
-```
-https://<your-pod-id>-8080.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote
-```
-
-(also saved to `/workspace/novnc-logs/novnc_url.txt` — `cat` it any time)
-
-Isaac Sim's GUI appears on the desktop after 1–2 minutes. Load your scene with
-**File → Open**. Mouse and keyboard work normally.
-
-**Requirement:** port **8080** exposed as an **HTTP** port (default on the Isaac
-images). Nothing else — no Direct TCP ports, no port mappings to copy after a
-restart.
-
-### If you already have the repo
+Already have the repo on the pod?
 
 ```bash
 cd /workspace/runpod_noVNC_isaac_sim && bash novnc.sh
@@ -129,6 +135,7 @@ stack and the GUI instance it launched itself.
 | `novnc.sh` | The method. Virtual display + VNC + noVNC + Isaac GUI. |
 | `install.sh` | Installs all dependencies via apt + pip. Called automatically; idempotent. |
 | `requirements.txt` | Python dependencies (`websockify`). Also documents the apt-only system packages. |
+| `TEMPLATE.md` | RunPod template settings + the description text to paste. |
 | `POSTMORTEM.md` | Every approach tried, why each failed, why noVNC won. |
 
 ## Security
