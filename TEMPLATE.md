@@ -31,7 +31,7 @@ get the **complete Isaac Sim desktop in your browser** over plain HTTP.
 
 ### How to use
 
-1. Pick a GPU and deploy. **Recommended: RTX 4090, RTX 5080, or RTX 5090.**
+1. Pick a GPU and deploy. **Use an RTX 4090** (see GPU note below).
 2. Wait ~2–3 minutes for the pod to boot and Isaac Sim to load.
 3. Open **Connect → HTTP Service → port 8080**.
 4. The Isaac Sim desktop appears. Load your scene with **File → Open**.
@@ -44,6 +44,20 @@ That's it. Everything installs and starts automatically on boot.
 - ✅ Works entirely over **HTTP** — no UDP, no WebRTC, no streaming client, no VPN
 - ✅ **Nothing to configure** — one HTTP port, no port mappings to copy after a restart
 - ✅ Survives terminal/SSH disconnects (everything runs detached)
+
+### ⚠️ GPU compatibility — read this
+
+| GPU | Works? |
+|---|---|
+| **RTX 4090**, RTX 3090, A6000, L40S (Ada/Ampere) | ✅ yes |
+| RTX 5080 / 5090 (Blackwell) | ❌ **no** |
+
+Isaac Sim 4.0.0 predates the RTX 50-series. On a 5080/5090 it reports
+`compute capability 12.0 is unsupported` and the viewport never renders — you get
+a grey window. **Pick an RTX 4090.**
+
+(Blackwell needs Isaac 4.5+, but those images run as an unprivileged user where
+the desktop cannot be installed — so 4090 is the supported combination.)
 
 ### Ports
 

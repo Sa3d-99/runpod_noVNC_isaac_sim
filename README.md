@@ -13,7 +13,7 @@ nothing to configure.**
 
 1. In RunPod, go to **Templates** and search for **`Isaac Sim noVNC`**
    *(by Sa3d-99)*.
-2. Pick a GPU — **RTX 4090**, **RTX 5080**, or **RTX 5090** recommended.
+2. Pick a GPU — **RTX 4090** (RTX 50-series does **not** work, see below).
 3. **Deploy.** Wait ~2–3 minutes.
 4. **Connect → HTTP Service → port 8080.**
 
@@ -22,6 +22,17 @@ The Isaac Sim desktop opens in your browser. Load your scene with
 
 > Setting up your own template instead? The exact settings are in
 > [TEMPLATE.md](TEMPLATE.md).
+
+### ⚠️ GPU: use an RTX 4090, not a 5080/5090
+
+Isaac Sim 4.0.0 predates the RTX 50-series (Blackwell, compute capability 12.0).
+On a 5080/5090 it logs `unsupported by this version` and the viewport never
+renders — a grey window, no matter how healthy the desktop is. Ada/Ampere cards
+(**RTX 4090**, 3090, A6000, L40S) work.
+
+Blackwell support needs Isaac 4.5+/5.x/6.x — but those images run as an
+unprivileged user with no sudo and a read-only `/usr`, so the desktop can't be
+installed there. **RTX 4090 + Isaac 4.0.0 is the combination that works.**
 
 ## Manual install — one command, nothing pre-installed
 
