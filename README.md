@@ -6,26 +6,26 @@ TURN, no Direct-TCP ports — one HTTP port and you're done.
 
 One script. One command. That's the whole repo.
 
-## Quick start
+## Quick start — one command, nothing pre-installed
+
+A fresh RunPod Isaac pod has **no git**, and often runs as the unprivileged
+`isaac-sim` user. So don't clone — bootstrap:
 
 ```bash
-# on the pod (SSH is more reliable than the web terminal)
-cd /workspace
-git clone https://github.com/Sa3d-99/runpod_noVNC_isaac_sim.git
-cd runpod_noVNC_isaac_sim && chmod +x *.sh
-bash novnc.sh
+curl -fsSL https://raw.githubusercontent.com/Sa3d-99/runpod_noVNC_isaac_sim/main/bootstrap.sh | bash
 ```
 
-`novnc.sh` calls `install.sh` itself, which installs everything needed (git,
-python3, Xvfb, x11vnc, fluxbox, noVNC, websockify) — no manual setup.
+That downloads the repo (no git needed), installs every dependency (using `sudo`
+automatically if you're not root), starts the desktop, launches Isaac Sim, and
+**prints your real URL** — no placeholder to fill in.
 
-Open the URL it prints:
+Then open the printed link. It looks like:
 
 ```
-https://<POD_ID>-8080.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote
+https://<your-pod-id>-8080.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote
 ```
 
-(also saved to `/workspace/novnc-logs/novnc_url.txt`)
+(also saved to `/workspace/novnc-logs/novnc_url.txt` — `cat` it any time)
 
 Isaac Sim's GUI appears on the desktop after 1–2 minutes. Load your scene with
 **File → Open**. Mouse and keyboard work normally.
@@ -33,6 +33,12 @@ Isaac Sim's GUI appears on the desktop after 1–2 minutes. Load your scene with
 **Requirement:** port **8080** exposed as an **HTTP** port (default on the Isaac
 images). Nothing else — no Direct TCP ports, no port mappings to copy after a
 restart.
+
+### If you already have the repo
+
+```bash
+cd /workspace/runpod_noVNC_isaac_sim && bash novnc.sh
+```
 
 ## How it works
 
@@ -69,11 +75,15 @@ noVNC wins — is in **[POSTMORTEM.md](POSTMORTEM.md)**.
 RunPod console → Edit Pod → **Container Start Command**:
 
 ```bash
-bash -c "command -v git >/dev/null || (apt-get update && apt-get install -y git); cd /workspace && (test -d runpod_noVNC_isaac_sim || git clone https://github.com/Sa3d-99/runpod_noVNC_isaac_sim.git) && cd runpod_noVNC_isaac_sim && chmod +x *.sh && bash novnc.sh && sleep infinity"
+bash -c "curl -fsSL https://raw.githubusercontent.com/Sa3d-99/runpod_noVNC_isaac_sim/main/bootstrap.sh | bash; sleep infinity"
 ```
 
-Clones on first boot, reuses after (`/workspace` is the persistent volume), then
-brings the desktop up. Pod start = browser-ready Isaac Sim.
+That's the whole thing. No git, no root assumption, nothing to pre-install — it
+downloads, installs, and starts the desktop on every boot. Pod start =
+browser-ready Isaac Sim, and the URL is waiting in
+`/workspace/novnc-logs/novnc_url.txt`.
+
+The `sleep infinity` keeps the container alive after the script detaches.
 
 ## Options
 
@@ -115,7 +125,8 @@ stack and the GUI instance it launched itself.
 
 | File | Purpose |
 |---|---|
-| `novnc.sh` | **The method.** Virtual display + VNC + noVNC + Isaac GUI. Run this. |
+| `bootstrap.sh` | **Start here.** Downloads the repo without git, then runs `novnc.sh`. |
+| `novnc.sh` | The method. Virtual display + VNC + noVNC + Isaac GUI. |
 | `install.sh` | Installs all dependencies via apt + pip. Called automatically; idempotent. |
 | `requirements.txt` | Python dependencies (`websockify`). Also documents the apt-only system packages. |
 | `POSTMORTEM.md` | Every approach tried, why each failed, why noVNC won. |

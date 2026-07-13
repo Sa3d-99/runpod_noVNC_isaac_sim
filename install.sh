@@ -23,6 +23,25 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { echo "[install] $*"; }
+die() { echo "[install] ERROR: $*" >&2; exit 1; }
+
+# --- privilege check ------------------------------------------------------------
+# Some RunPod Isaac images run as the unprivileged 'isaac-sim' user, where
+# apt-get fails with "Permission denied". Use sudo when we're not root.
+SUDO=""
+if [[ "$(id -u)" -ne 0 ]]; then
+    if sudo -n true 2>/dev/null; then
+        SUDO="sudo"
+        log "Not root — using passwordless sudo for package installs."
+    else
+        die "Not running as root and passwordless sudo is unavailable.
+       Fix by either:
+         (a) using a root shell:            sudo -i     then re-run
+         (b) starting the pod as root, or
+         (c) pre-installing the packages listed in requirements.txt.
+       Current user: $(id -un)"
+    fi
+fi
 
 # --- system packages ------------------------------------------------------------
 MISSING=()
@@ -36,8 +55,8 @@ if [[ ${#MISSING[@]} -eq 0 ]]; then
     log "All system dependencies already present."
 else
     log "Installing missing: ${MISSING[*]}"
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    $SUDO apt-get update -qq
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         git \
         python3 python3-pip \
         xvfb x11vnc fluxbox \

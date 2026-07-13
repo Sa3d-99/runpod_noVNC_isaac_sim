@@ -42,7 +42,23 @@ die() { echo "[novnc] ERROR: $*" >&2; exit 1; }
 
 # --- 1. dependencies (git, python3, Xvfb, x11vnc, fluxbox, noVNC, websockify) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bash "$SCRIPT_DIR/install.sh"
+if [[ -f "$SCRIPT_DIR/install.sh" ]]; then
+    bash "$SCRIPT_DIR/install.sh"
+else
+    # Standalone use (this file fetched on its own): install inline.
+    SUDO=""
+    if [[ "$(id -u)" -ne 0 ]]; then
+        sudo -n true 2>/dev/null && SUDO="sudo" \
+            || die "Not root and no passwordless sudo — run 'sudo -i' first, or start the pod as root."
+    fi
+    if ! command -v Xvfb >/dev/null 2>&1 || [[ ! -d /usr/share/novnc ]]; then
+        log "Installing desktop stack..."
+        $SUDO apt-get update -qq
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            git python3 python3-pip xvfb x11vnc fluxbox novnc websockify \
+            x11-utils ca-certificates >/dev/null
+    fi
+fi
 
 # --- 2. stop only OUR previous stack (never the container's main Isaac) ---------
 # The RunPod Isaac image runs a headless Isaac as the container's MAIN process
@@ -131,18 +147,38 @@ else
     fi
 fi
 
-# --- 7. print the URL ------------------------------------------------------------
-POD="${RUNPOD_POD_ID:-<POD_ID>}"
-URL="https://${POD}-${WEB_PORT}.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote"
-echo "$URL" > "$LOG_DIR/novnc_url.txt"
+# --- 7. print the REAL URL --------------------------------------------------------
+# Never print a <POD_ID> placeholder — either we can build the real link or we say
+# exactly how to get it. RunPod injects RUNPOD_POD_ID; fall back to parsing the
+# pod id out of the SSH/hostname info if that env var is missing.
+POD="${RUNPOD_POD_ID:-}"
+if [[ -z "$POD" ]]; then
+    # RunPod sets RUNPOD_POD_HOSTNAME like "<podid>-<suffix>"
+    POD="${RUNPOD_POD_HOSTNAME%%-*}"
+fi
 
 echo ""
 echo "=================================================================="
-echo "  noVNC desktop is UP. Open in your browser:"
+if [[ -n "$POD" ]]; then
+    URL="https://${POD}-${WEB_PORT}.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote"
+    echo "$URL" > "$LOG_DIR/novnc_url.txt"
+    echo "  noVNC desktop is UP. Open this in your browser:"
+    echo ""
+    echo "    $URL"
+    echo ""
+    echo "  (also saved to $LOG_DIR/novnc_url.txt)"
+else
+    echo "  noVNC desktop is UP on port ${WEB_PORT}, but the pod id is not in the"
+    echo "  environment, so the exact URL can't be built here."
+    echo ""
+    echo "  Get it from the RunPod console: your Pod -> Connect ->"
+    echo "  the HTTP Service link for port ${WEB_PORT}, then append:"
+    echo "      /vnc.html?autoconnect=1&resize=remote"
+    echo ""
+    echo "  It looks like:"
+    echo "      https://<POD_ID>-${WEB_PORT}.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote"
+fi
 echo ""
-echo "    $URL"
-echo ""
-echo "  (also saved to $LOG_DIR/novnc_url.txt)"
 echo "  Isaac Sim GUI takes 1-2 min to appear on the desktop."
 echo "  Then load your scene with  File > Open  inside the GUI."
 echo "=================================================================="
