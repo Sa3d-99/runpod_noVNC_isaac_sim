@@ -1,0 +1,16 @@
+name: GitHub Repo Stats
+
+on:
+  schedule:
+
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: run-ghrs
+        uses: jgehrcke/github-repo-stats@v1.4.2
+        with:
+          repository: ${{ github.repository }}
+          ghtoken: ${{ secrets.TRAFFIC_TOKEN }}
