@@ -1,6 +1,6 @@
-## Support
+# Support
 
-If this tool saved you time and server costs, consider supporting my work here: [Buy me a coffee](https://buymeacoffee.com/sa3d_99)
+## If this tool saved you time and server costs, consider supporting my work here: [Buy me a coffee](https://buymeacoffee.com/sa3d_99)
 
 ---
 
