@@ -1,3 +1,9 @@
+## Support
+
+If this tool saved you time and server costs, consider supporting my work here: [Buy me a coffee](https://buymeacoffee.com/sa3d_99)
+
+---
+
 # Isaac Sim on RunPod — browser access that actually works (noVNC)
 
 Run NVIDIA Isaac Sim on a RunPod pod and use its **full GUI in your browser**.
@@ -80,12 +86,12 @@ terminate it.
 
 ```
 Isaac Sim GUI  →  renders into a virtual X screen (Xvfb, on the GPU)
-                       ↓
-                  x11vnc  exposes that screen as VNC on localhost:5900
-                       ↓
-              websockify + noVNC  serve it as a web page on :8080
-                       ↓
-        RunPod HTTP proxy (TCP)  →  your browser
+                        ↓
+                   x11vnc  exposes that screen as VNC on localhost:5900
+                        ↓
+               websockify + noVNC  serve it as a web page on :8080
+                        ↓
+         RunPod HTTP proxy (TCP)  →  your browser
 ```
 
 Isaac Sim never streams anything itself, and is never modified. We let it draw
