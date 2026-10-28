@@ -8,4 +8,4 @@ Read [docs/knowledge-base/README.md](docs/knowledge-base/README.md) before subst
 - Generated graphs and extraction caches are local and ignored by Git. Rebuild if absent; exclude dependencies, build output, generated vault exports, and secrets using `.graphifyignore`.
 - Keep durable notes in `docs/knowledge-base/`. Preserve authored notes when regenerating the vault, and incorporate these notes into it. The standing project workflow authorizes Obsidian export.
 
-This project runs Isaac Sim. Its original runtime and README/TEMPLATE/requirements are restored from `cfdca8f`; Gazebo belongs to the separate `Gazebo_ROS2_Web_Simulation` repository. Preserve the original desktop workflow and keep validation claims aligned with the recorded evidence.
+This project runs Isaac Sim. Its baseline runtime and original documentation were restored from `cfdca8f`; the latest user request authorizes targeted lifecycle/startup/installer fixes. Gazebo belongs to the separate `Gazebo_ROS2_Web_Simulation` repository. Preserve the original desktop workflow and keep validation claims aligned with the recorded evidence.

@@ -1,0 +1,13 @@
+name: Isaac launcher checks
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  checks:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n bootstrap.sh install.sh install-utils.sh novnc.sh stop.sh
+      - name: Check process ownership and startup
+        run: python3 -m unittest discover -s tests -v

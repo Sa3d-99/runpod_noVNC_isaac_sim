@@ -1,10 +1,11 @@
 # Project knowledge
 
-The project provides a browser desktop for NVIDIA Isaac Sim on RunPod. Its original application scripts and user documentation are restored from commit `cfdca8f`.
+The project provides a browser desktop for NVIDIA Isaac Sim on RunPod. Its application source was restored from commit `cfdca8f`; the user subsequently authorized targeted lifecycle, startup, and installer hardening while keeping the project Isaac-only.
 
 - [Architecture and preserved behavior](architecture.md)
 - [Gazebo separation and provenance](migration.md)
 - [Validation evidence and unresolved runtime checks](validation.md)
+- [SSH and browser-terminal investigation](ssh-terminal-investigation.md)
 - [User setup and commands](../../README.md)
 - [Original streaming investigation](../../POSTMORTEM.md)
 

@@ -43,11 +43,21 @@ if [[ "$(id -u)" -ne 0 ]]; then
     fi
 fi
 
+# Keep installation visible and avoid image hooks that clean the default apt cache.
+# shellcheck source=install-utils.sh
+source "$DIR/install-utils.sh"
+LOG_DIR="${LOG_DIR:-/workspace/novnc-logs}"
+mkdir -p "$LOG_DIR"
+exec > >(tee -a "$LOG_DIR/install.log") 2>&1
+log "Isaac noVNC dependency installation. Log: $LOG_DIR/install.log"
+install_prepare_apt
+
 # --- system packages ------------------------------------------------------------
 MISSING=()
 for cmd in git python3 Xvfb x11vnc fluxbox websockify xdpyinfo; do
     command -v "$cmd" >/dev/null 2>&1 || MISSING+=("$cmd")
 done
+python3 -m pip --version >/dev/null 2>&1 || MISSING+=("python3-pip")
 # noVNC ships web assets, not a binary — check the directory instead
 [[ -d /usr/share/novnc ]] || MISSING+=("novnc")
 
@@ -55,14 +65,14 @@ if [[ ${#MISSING[@]} -eq 0 ]]; then
     log "All system dependencies already present."
 else
     log "Installing missing: ${MISSING[*]}"
-    $SUDO apt-get update -qq
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    install_apt update
+    install_apt install -y \
         git \
         python3 python3-pip \
         xvfb x11vnc fluxbox \
         novnc websockify \
         x11-utils iproute2 \
-        ca-certificates >/dev/null
+        ca-certificates
     log "System packages installed."
 fi
 
@@ -71,8 +81,11 @@ fi
 REQ="$DIR/requirements.txt"
 if [[ -f "$REQ" ]] && grep -qEv '^[[:space:]]*(#|$)' "$REQ"; then
     log "Installing Python requirements..."
-    python3 -m pip install --quiet --no-input -r "$REQ" 2>/dev/null \
-        || python3 -m pip install --quiet --no-input --break-system-packages -r "$REQ"
+    PIP_ARGS=(--no-input --progress-bar on)
+    if python3 -c 'import pathlib,sys,sysconfig; sys.exit(not (pathlib.Path(sysconfig.get_path("stdlib")) / "EXTERNALLY-MANAGED").exists())'; then
+        PIP_ARGS+=(--break-system-packages)
+    fi
+    python3 -m pip install "${PIP_ARGS[@]}" -r "$REQ"
     log "Python packages installed."
 fi
 

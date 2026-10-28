@@ -23,6 +23,11 @@ Everything above the line is notes for you, not for the template.
 
 ---
 
+Use `ACCEPT_EULA=Y` for the Isaac image. The browser desktop uses HTTP 8080;
+SSH uses TCP 22. Remove any UDP 22 entry and leave UDP support disabled.
+Dependency installation is printed in the logs. A `Running` pod label alone does
+not establish that every service has started successfully.
+
 ## 📋 Template description (copy from here down)
 
 **Isaac Sim with a full GUI in your browser — no setup, no streaming client.**
@@ -67,7 +72,7 @@ the desktop cannot be installed — so 4090 is the supported combination.)
 | Port | Purpose |
 |---|---|
 | 8080 (HTTP) | The Isaac Sim desktop (noVNC) — this is the one you open |
-| 22 (TCP) | SSH, if you want a shell |
+| 22 (TCP) | Direct SSH when an SSH server is configured in the image |
 
 ### Troubleshooting
 

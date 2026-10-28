@@ -3,3 +3,8 @@ graphify-out/
 .graphify/
 __pycache__/
 *.py[cod]
+cat >> .gitignore <<'EOF'
+
+# VS Code generated databases
+.vscode/browse.vc.db*
+EOF
