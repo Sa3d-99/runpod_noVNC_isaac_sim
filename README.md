@@ -1,9 +1,3 @@
-# Support
-
-## If this tool saved you time and server costs, consider supporting my work here: [Buy me a coffee](https://buymeacoffee.com/sa3d_99)
-
----
-
 # Isaac Sim on RunPod — browser access that actually works (noVNC)
 
 Run NVIDIA Isaac Sim on a RunPod pod and use its **full GUI in your browser**.
@@ -72,16 +66,11 @@ cd /workspace/runpod_noVNC_isaac_sim && bash novnc.sh
 cd /workspace/runpod_noVNC_isaac_sim && bash stop.sh
 ```
 
-Stops verified desktop and Isaac GUI sessions, and leaves the pod running. Start it
+Stops the desktop and the Isaac Sim GUI, and leaves the pod running. Start it
 again any time with `bash novnc.sh`.
 
 `stop.sh` deliberately leaves the container's *own* Isaac process alone — that
 one is the container's main process, and killing it would stop the whole pod.
-Cleanup checks per-display session records, kernel boot identity and process start
-time before signalling anything. Plain or stale PID files are never trusted, and
-PID 1, calling-shell ancestors, and unrelated Isaac sessions are preserved.
-An already-used, unverified display or port produces an error instead of being
-killed or having its socket deleted.
 
 **To stop paying, stop the POD itself** in the RunPod console. `stop.sh` only
 shuts down the desktop inside the pod; the pod keeps billing until you stop or
@@ -91,12 +80,12 @@ terminate it.
 
 ```
 Isaac Sim GUI  →  renders into a virtual X screen (Xvfb, on the GPU)
-                        ↓
-                   x11vnc  exposes that screen as VNC on localhost:5900
-                        ↓
-               websockify + noVNC  serve it as a web page on :8080
-                        ↓
-         RunPod HTTP proxy (TCP)  →  your browser
+                       ↓
+                  x11vnc  exposes that screen as VNC on localhost:5900
+                       ↓
+              websockify + noVNC  serve it as a web page on :8080
+                       ↓
+        RunPod HTTP proxy (TCP)  →  your browser
 ```
 
 Isaac Sim never streams anything itself, and is never modified. We let it draw
@@ -146,12 +135,7 @@ Example: `RES=2560x1440 VNC_PASSWORD=hunter2 bash novnc.sh`
 
 ## Troubleshooting
 
-Services run in detached sessions — SSH/terminal drops do **not** own their
-lifetime. A container restart still ends every process inside that container.
-
-Dependency downloads, apt and pip output are visible and appended to
-`/workspace/novnc-logs/install.log`. The installer uses a private temporary apt
-cache and waits for another installer of this project to finish.
+Everything is detached (`setsid`) — SSH/terminal drops will **not** kill it.
 
 ```bash
 # is the whole stack up?
@@ -165,10 +149,7 @@ tail -20 /workspace/novnc-logs/isaac-gui.log
 | Page loads, grey/empty desktop | Isaac still starting (1–2 min). Check `isaac-gui.log`. |
 | Page won't load at all | 8080 not exposed as HTTP in the pod config, or websockify died — see `websockify.log`. |
 | Isaac window never appears | Look for a Vulkan/GL error in `isaac-gui.log` — the GPU couldn't present to the virtual display. |
-| Everything died after a restart | Re-run `bash novnc.sh`; verified sessions are cleaned up safely. |
-| Display or port already in use | Another unverified service owns it. Choose a free display/port; the script leaves that service alone. |
-| GUI warnings in RunPod Logs | Check `/workspace/novnc-logs/isaac-gui.log` for this launcher's GUI. The container's own headless Isaac logs are separate. |
-| Dependency installation fails | Read `/workspace/novnc-logs/install.log`; failures stay visible and block desktop startup. |
+| Everything died after a restart | Re-run `bash novnc.sh` — it's idempotent and cleans up its own previous run. |
 
 ⚠️ **Never kill the Isaac process the container itself started**
 (`omni.isaac.sim.headless.*.kit`, usually PID ~54). On the RunPod image it is the
@@ -183,9 +164,7 @@ stack and the GUI instance it launched itself.
 | `bootstrap.sh` | **Start here.** Downloads the repo without git, then runs `novnc.sh`. |
 | `novnc.sh` | The method. Virtual display + VNC + noVNC + Isaac GUI. |
 | `stop.sh` | Stops the desktop cleanly (leaves the pod and its main process alive). |
-| `install.sh` | Installs dependencies with visible output and an install log. Called automatically. |
-| `install-utils.sh` | Installer locking, download retries and private apt-cache cleanup. |
-| `process_control.py` | Starts detached services and verifies process ownership before shutdown. |
+| `install.sh` | Installs all dependencies via apt + pip. Called automatically; idempotent. |
 | `requirements.txt` | Python dependencies (`websockify`). Also documents the apt-only system packages. |
 | `TEMPLATE.md` | RunPod template settings + the description text to paste. |
 | `POSTMORTEM.md` | Every approach tried, why each failed, why noVNC won. |
@@ -195,11 +174,3 @@ stack and the GUI instance it launched itself.
 The noVNC endpoint has **no authentication by default** — anyone with the URL can
 view and control the sim. Set `VNC_PASSWORD=...` if the pod URL might be shared,
 and stop the pod when you're not using it.
-
-## License
-
-[MIT](LICENSE) — free to use, modify, and redistribute, including commercially.
-Provided as-is, with no warranty.
-
-Isaac Sim itself is NVIDIA's, under its own license. This repo only contains the
-scripts that put its GUI in your browser.

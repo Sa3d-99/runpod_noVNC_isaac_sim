@@ -59,37 +59,43 @@ wait_port() {
 
 # --- 1. dependencies (git, python3, Xvfb, x11vnc, fluxbox, noVNC, websockify) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -f "$SCRIPT_DIR/install.sh" && -f "$SCRIPT_DIR/process_control.py" ]] \
-    || die "Use bootstrap.sh to download the full repository, including process_control.py."
-bash "$SCRIPT_DIR/install.sh"
-
-# --- 2. stop only sessions recorded by this launcher -----------------------------
-CONTROL="$SCRIPT_DIR/process_control.py"
-[[ -f "$CONTROL" ]] || die "Missing process_control.py; use bootstrap.sh to download the full repository."
-exec 9>"$LOG_DIR/.stack.lock"
-flock -n 9 || die "Another noVNC start/stop is in progress. Wait for it to finish."
-managed() { python3 "$CONTROL" --log-dir "$LOG_DIR" --display "$DISPLAY_NUM" "$@"; }
-managed_start() {
-    local name="$1"
-    if ! managed start "$@"; then
-        [[ ! -f "$LOG_DIR/$name.log" ]] || tail -n 40 "$LOG_DIR/$name.log" >&2
-        die "Could not start $name; see $LOG_DIR/$name.log"
+if [[ -f "$SCRIPT_DIR/install.sh" ]]; then
+    bash "$SCRIPT_DIR/install.sh"
+else
+    # Standalone use (this file fetched on its own): install inline.
+    SUDO=""
+    if [[ "$(id -u)" -ne 0 ]]; then
+        sudo -n true 2>/dev/null && SUDO="sudo" \
+            || die "Not root and no passwordless sudo — run 'sudo -i' first, or start the pod as root."
     fi
-}
-log "Cleaning up verified sessions from our previous noVNC stack..."
-managed stop
-# Never unlink another display's sockets or kill processes by a name pattern.
-if xdpyinfo -display "$DISPLAY_NUM" >/dev/null 2>&1; then
-    die "Display $DISPLAY_NUM is already in use by an unverified server. Choose another DISPLAY_NUM."
+    if ! command -v Xvfb >/dev/null 2>&1 || [[ ! -d /usr/share/novnc ]]; then
+        log "Installing desktop stack..."
+        $SUDO apt-get update -qq
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            git python3 python3-pip xvfb x11vnc fluxbox novnc websockify \
+            x11-utils iproute2 ca-certificates >/dev/null
+    fi
 fi
-port_open "$VNC_PORT" && die "VNC port $VNC_PORT is already in use."
-port_open "$WEB_PORT" && die "HTTP port $WEB_PORT is already in use."
+
+# --- 2. stop only OUR previous stack (never the container's main Isaac) ---------
+# The RunPod Isaac image runs a headless Isaac as the container's MAIN process
+# (child of docker-init). Killing that stops the whole container, so we only ever
+# touch the desktop stack and the GUI instance this script itself starts.
+log "Cleaning up any previous noVNC stack..."
+[[ -f "$LOG_DIR/isaac-gui.pid" ]] && kill "$(cat "$LOG_DIR/isaac-gui.pid")" 2>/dev/null || true
+pkill -f "Xvfb ${DISPLAY_NUM}" 2>/dev/null || true
+pkill -f "x11vnc -display ${DISPLAY_NUM}" 2>/dev/null || true
+pkill -f "websockify --web=/usr/share/novnc ${WEB_PORT}" 2>/dev/null || true
+sleep 2
+rm -f "/tmp/.X${DISPLAY_NUM#:}-lock"
+rm -rf "/tmp/.X11-unix/X${DISPLAY_NUM#:}" 2>/dev/null || true
 
 export DISPLAY="$DISPLAY_NUM"
 
 # --- 3. virtual display + window manager ---------------------------------------
 log "Starting virtual display ${DISPLAY_NUM} at ${RES}..."
-managed_start xvfb -- Xvfb "$DISPLAY_NUM" -screen 0 "${RES}x24" +extension GLX +render -noreset
+setsid Xvfb "$DISPLAY_NUM" -screen 0 "${RES}x24" +extension GLX +render -noreset \
+    </dev/null >"$LOG_DIR/xvfb.log" 2>&1 &
 for _ in $(seq 1 15); do
     xdpyinfo -display "$DISPLAY_NUM" >/dev/null 2>&1 && break
     sleep 1
@@ -98,7 +104,7 @@ xdpyinfo -display "$DISPLAY_NUM" >/dev/null 2>&1 \
     || die "Xvfb failed to start — see $LOG_DIR/xvfb.log"
 log "Virtual display up."
 
-managed_start fluxbox -- fluxbox
+setsid fluxbox </dev/null >"$LOG_DIR/fluxbox.log" 2>&1 &
 sleep 1
 
 # --- 4. VNC server on that display ----------------------------------------------
@@ -110,8 +116,9 @@ else
     AUTH=(-nopw)
 fi
 log "Starting VNC server on localhost:${VNC_PORT}..."
-managed_start x11vnc -- x11vnc -display "$DISPLAY_NUM" -forever -shared "${AUTH[@]}" \
-    -rfbport "$VNC_PORT" -localhost -noxdamage
+setsid x11vnc -display "$DISPLAY_NUM" -forever -shared "${AUTH[@]}" \
+    -rfbport "$VNC_PORT" -localhost -noxdamage \
+    </dev/null >"$LOG_DIR/x11vnc.log" 2>&1 &
 sleep 2
 wait_port "$VNC_PORT" 15 \
     || die "x11vnc failed to bind :${VNC_PORT} — see $LOG_DIR/x11vnc.log"
@@ -119,7 +126,8 @@ log "VNC server up."
 
 # --- 5. noVNC web front-end (HTTP + WebSocket, rides RunPod's HTTP proxy) -------
 log "Starting noVNC web server on :${WEB_PORT}..."
-managed_start websockify -- websockify --web=/usr/share/novnc "$WEB_PORT" "localhost:${VNC_PORT}"
+setsid websockify --web=/usr/share/novnc "$WEB_PORT" "localhost:${VNC_PORT}" \
+    </dev/null >"$LOG_DIR/websockify.log" 2>&1 &
 sleep 2
 wait_port "$WEB_PORT" 15 \
     || die "websockify failed to bind :${WEB_PORT} — see $LOG_DIR/websockify.log"
@@ -129,7 +137,6 @@ log "noVNC web server up."
 # Launcher name differs across versions, so probe for whichever exists:
 #   4.x            -> isaac-sim.sh / runapp.sh
 #   5.x / variants -> isaac-sim.selector.sh, or kit with the GUI .kit app
-GUI_STARTED=0
 if [[ "${NO_ISAAC:-0}" == "1" ]]; then
     log "NO_ISAAC=1 — desktop only, skipping Isaac launch."
 else
@@ -143,26 +150,19 @@ else
         GUI_KIT="$(ls apps/*isaac.sim.kit apps/isaacsim.exp.full.kit 2>/dev/null | head -1 || true)"
         if [[ -n "$GUI_KIT" && -x ./kit/kit ]]; then
             log "Launching Isaac Sim GUI via kit + ${GUI_KIT}..."
-            managed_start isaac-gui -- ./kit/kit "$GUI_KIT" \
-                --ext-folder ./apps --allow-root
-            GUI_STARTED=1
+            setsid env DISPLAY="$DISPLAY_NUM" ./kit/kit "$GUI_KIT" \
+                --ext-folder ./apps --allow-root \
+                </dev/null >"$LOG_DIR/isaac-gui.log" 2>&1 &
+            echo $! > "$LOG_DIR/isaac-gui.pid"
         else
             log "WARNING: no Isaac GUI launcher found under $ISAAC_ROOT."
             log "Desktop is up — start Isaac yourself with: DISPLAY=$DISPLAY_NUM <launcher>"
         fi
     else
         log "Launching Isaac Sim GUI (${GUI_LAUNCHER}) on ${DISPLAY_NUM}..."
-        managed_start isaac-gui -- "$GUI_LAUNCHER" --allow-root
-        GUI_STARTED=1
-    fi
-fi
-
-if [[ "$GUI_STARTED" == 1 ]]; then
-    sleep 2
-    if ! managed status isaac-gui; then
-        log "WARNING: Isaac GUI exited during startup; the browser desktop is still available."
-        tail -n 40 "$LOG_DIR/isaac-gui.log" || true
-        GUI_STARTED=0
+        setsid env DISPLAY="$DISPLAY_NUM" "$GUI_LAUNCHER" --allow-root \
+            </dev/null >"$LOG_DIR/isaac-gui.log" 2>&1 &
+        echo $! > "$LOG_DIR/isaac-gui.pid"
     fi
 fi
 
@@ -173,8 +173,7 @@ fi
 POD="${RUNPOD_POD_ID:-}"
 if [[ -z "$POD" ]]; then
     # RunPod sets RUNPOD_POD_HOSTNAME like "<podid>-<suffix>"
-    POD="${RUNPOD_POD_HOSTNAME:-}"
-    POD="${POD%%-*}"
+    POD="${RUNPOD_POD_HOSTNAME%%-*}"
 fi
 
 echo ""
@@ -199,13 +198,9 @@ else
     echo "      https://<POD_ID>-${WEB_PORT}.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote"
 fi
 echo ""
-if [[ "$GUI_STARTED" == 1 ]]; then
-    echo "  Isaac Sim GUI takes 1-2 min to appear on the desktop."
-    echo "  Then load your scene with  File > Open  inside the GUI."
-else
-    echo "  Desktop is up. Isaac GUI was skipped, unavailable, or exited; check isaac-gui.log."
-fi
+echo "  Isaac Sim GUI takes 1-2 min to appear on the desktop."
+echo "  Then load your scene with  File > Open  inside the GUI."
 echo "=================================================================="
 echo ""
-log "Everything runs in a detached session — survives terminal/SSH disconnect."
+log "Everything is detached (setsid) — survives terminal/SSH disconnect."
 log "Logs: $LOG_DIR/{xvfb,x11vnc,websockify,fluxbox,isaac-gui}.log"
