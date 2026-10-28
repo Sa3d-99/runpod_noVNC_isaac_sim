@@ -1,9 +1,9 @@
 # Project knowledge
 
-The project provides a browser desktop for NVIDIA Isaac Sim and optional ROS 2 Gazebo on RunPod.
+The project provides a browser desktop for NVIDIA Isaac Sim on RunPod. Its original application scripts and user documentation are restored from commit `cfdca8f`.
 
 - [Architecture and preserved behavior](architecture.md)
-- [Gazebo compatibility and implementation decisions](gazebo.md)
+- [Gazebo separation and provenance](migration.md)
 - [Validation evidence and unresolved runtime checks](validation.md)
 - [User setup and commands](../../README.md)
 - [Original streaming investigation](../../POSTMORTEM.md)

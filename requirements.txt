@@ -6,9 +6,6 @@
 websockify>=0.11.0
 
 # ---------------------------------------------------------------------------
-# Gazebo mode additionally installs ros-<distro>-ros-base, ros-<distro>-ros-gz,
-# Mesa/GL libraries, libxcb-cursor0 and dbus-x11 via apt (see gazebo.sh).
-# ROS Humble/Fortress requires Ubuntu 22.04; Jazzy/Harmonic requires 24.04.
 # NOT pip packages — these are installed by install.sh via apt, because they are
 # system binaries and pip cannot provide them:
 #   git         clone/update the repo on the pod

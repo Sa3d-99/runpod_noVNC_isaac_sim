@@ -26,9 +26,6 @@
 #   VNC_PASSWORD=...     set a VNC password (default: none, pod is private)
 #   NO_ISAAC=1           only bring up the desktop, don't launch Isaac
 #   LOG_DIR=/workspace/novnc-logs
-#   SIMULATOR=gazebo    launch Gazebo instead (default: isaac)
-#   ROS_DISTRO=humble   Ubuntu 22.04; jazzy for Ubuntu 24.04 (auto-detected)
-#   GAZEBO_ARGS='-r shapes.sdf'
 # =============================================================================
 set -euo pipefail
 
@@ -38,7 +35,6 @@ ISAAC_ROOT="${ISAAC_ROOT:-/isaac-sim}"
 DISPLAY_NUM="${DISPLAY_NUM:-:1}"
 LOG_DIR="${LOG_DIR:-/workspace/novnc-logs}"
 VNC_PORT="${VNC_PORT:-5900}"
-export SIMULATOR="${SIMULATOR:-isaac}"
 mkdir -p "$LOG_DIR"
 
 log() { echo "[novnc] $*"; }
@@ -63,17 +59,6 @@ wait_port() {
 
 # --- 1. dependencies (git, python3, Xvfb, x11vnc, fluxbox, noVNC, websockify) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-case "$SIMULATOR" in
-    isaac) ;;
-    gazebo)
-        [[ -f "$SCRIPT_DIR/gazebo.sh" && -f "$SCRIPT_DIR/install.sh" ]] \
-            || die "Gazebo mode needs the full repository; use bootstrap.sh or clone it."
-        # shellcheck source=gazebo.sh
-        source "$SCRIPT_DIR/gazebo.sh"
-        gazebo_select_platform
-        ;;
-    *) die "SIMULATOR must be isaac or gazebo." ;;
-esac
 if [[ -f "$SCRIPT_DIR/install.sh" ]]; then
     bash "$SCRIPT_DIR/install.sh"
 else
@@ -97,9 +82,6 @@ fi
 # (child of docker-init). Killing that stops the whole container, so we only ever
 # touch the desktop stack and the GUI instance this script itself starts.
 log "Cleaning up any previous noVNC stack..."
-if [[ -f "$SCRIPT_DIR/gazebo.sh" ]]; then
-    LOG_DIR="$LOG_DIR" bash "$SCRIPT_DIR/gazebo.sh" stop
-fi
 [[ -f "$LOG_DIR/isaac-gui.pid" ]] && kill "$(cat "$LOG_DIR/isaac-gui.pid")" 2>/dev/null || true
 pkill -f "Xvfb ${DISPLAY_NUM}" 2>/dev/null || true
 pkill -f "x11vnc -display ${DISPLAY_NUM}" 2>/dev/null || true
@@ -155,16 +137,7 @@ log "noVNC web server up."
 # Launcher name differs across versions, so probe for whichever exists:
 #   4.x            -> isaac-sim.sh / runapp.sh
 #   5.x / variants -> isaac-sim.selector.sh, or kit with the GUI .kit app
-if [[ "$SIMULATOR" == gazebo ]]; then
-    log "Launching Gazebo ${GAZEBO_RELEASE} / ROS ${ROS_DISTRO} on ${DISPLAY_NUM}..."
-    setsid env DISPLAY="$DISPLAY_NUM" bash "$SCRIPT_DIR/gazebo.sh" launch \
-        </dev/null >"$LOG_DIR/gazebo-gui.log" 2>&1 &
-    GAZEBO_PID=$!
-    echo "$GAZEBO_PID" > "$LOG_DIR/gazebo-gui.pid"
-    sleep 3
-    kill -0 "$GAZEBO_PID" 2>/dev/null \
-        || die "Gazebo exited during launch — see $LOG_DIR/gazebo-gui.log"
-elif [[ "${NO_ISAAC:-0}" == "1" ]]; then
+if [[ "${NO_ISAAC:-0}" == "1" ]]; then
     log "NO_ISAAC=1 — desktop only, skipping Isaac launch."
 else
     cd "$ISAAC_ROOT"
@@ -200,8 +173,7 @@ fi
 POD="${RUNPOD_POD_ID:-}"
 if [[ -z "$POD" ]]; then
     # RunPod sets RUNPOD_POD_HOSTNAME like "<podid>-<suffix>"
-    POD="${RUNPOD_POD_HOSTNAME:-}"
-    POD="${POD%%-*}"
+    POD="${RUNPOD_POD_HOSTNAME%%-*}"
 fi
 
 echo ""
@@ -226,15 +198,9 @@ else
     echo "      https://<POD_ID>-${WEB_PORT}.proxy.runpod.net/vnc.html?autoconnect=1&resize=remote"
 fi
 echo ""
-if [[ "$SIMULATOR" == gazebo ]]; then
-    echo "  Gazebo ${GAZEBO_RELEASE} / ROS ${ROS_DISTRO} is starting on the desktop."
-    echo "  Launch log: $LOG_DIR/gazebo-gui.log"
-else
-    echo "  Isaac Sim GUI takes 1-2 min to appear on the desktop."
-    echo "  Then load your scene with  File > Open  inside the GUI."
-fi
+echo "  Isaac Sim GUI takes 1-2 min to appear on the desktop."
+echo "  Then load your scene with  File > Open  inside the GUI."
 echo "=================================================================="
 echo ""
 log "Everything is detached (setsid) — survives terminal/SSH disconnect."
 log "Logs: $LOG_DIR/{xvfb,x11vnc,websockify,fluxbox,isaac-gui}.log"
-[[ "$SIMULATOR" != gazebo ]] || log "Gazebo log: $LOG_DIR/gazebo-gui.log"

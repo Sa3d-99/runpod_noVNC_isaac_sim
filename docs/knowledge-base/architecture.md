@@ -1,26 +1,23 @@
 # Architecture
 
-The shared desktop remains the original project's execution path. `SIMULATOR=isaac` is the default; `SIMULATOR=gazebo` selects a second application on the same desktop.
+This repository runs Isaac Sim's GUI through a browser desktop on RunPod. The runtime scripts, `README.md`, `TEMPLATE.md`, and `requirements.txt` are restored from `cfdca8f`; Gazebo has moved to its own [repository](https://github.com/Sa3d-99/Gazebo_ROS2_Web_Simulation).
 
 ```text
 bootstrap.sh → novnc.sh → install.sh
-                  │           └─ gazebo.sh helpers when Gazebo is selected
                   ├─ Xvfb + Fluxbox
                   ├─ x11vnc on localhost:5900
                   ├─ websockify + noVNC on HTTP :8080 → RunPod proxy → browser
-                  └─ Isaac GUI OR ROS launch → Gazebo GUI/server
+                  └─ Isaac Sim GUI
 ```
 
-`bootstrap.sh` downloads a GitHub archive without requiring Git, replaces the destination checkout, and executes `novnc.sh`. Environment overrides pass through. Avoid storing unique work inside a bootstrap-managed destination, because rerunning bootstrap replaces it.
+`bootstrap.sh` downloads a GitHub archive without requiring Git, replaces the destination checkout, and executes `novnc.sh`. Environment overrides pass through. Keep unique work outside a bootstrap-managed destination because rerunning bootstrap replaces it.
 
-`install.sh` installs the existing apt desktop stack and `requirements.txt` (`websockify`). Installation requires root or passwordless sudo. In Gazebo mode, compatibility is checked first and Gazebo/ROS packages are then installed through the shared helper. Isaac mode does not install ROS or Gazebo.
+`install.sh` installs apt desktop dependencies and `requirements.txt` (`websockify`). Installation requires root or passwordless sudo. No ROS or Gazebo package installation belongs to this project.
 
-`novnc.sh` cleans up its previous desktop, exports the selected X display, starts Xvfb, Fluxbox, x11vnc, and websockify, and launches the selected simulator. Long-lived processes use `setsid` so terminal disconnects do not own their lifetime. Isaac retains its existing launcher discovery (`isaac-sim.sh`, `runapp.sh`, selector, then Kit fallback), `ISAAC_ROOT`, and `NO_ISAAC=1` behavior.
+`novnc.sh` cleans up its previous desktop, exports the selected X display, starts Xvfb, Fluxbox, x11vnc, and websockify, and discovers an Isaac launcher (`isaac-sim.sh`, `runapp.sh`, selector, then Kit fallback). Long-lived processes use `setsid`. `ISAAC_ROOT` locates the installation; `NO_ISAAC=1` starts only the desktop.
 
-Gazebo uses a separate detached ROS launch session and `gazebo-gui.pid`. Before a restart or through `stop.sh`, the helper stops the recorded Gazebo process group. Other Gazebo sessions are not selected by a broad name match. Existing Isaac shutdown logic is preserved; its PID tracking and GUI process patterns are separate from Gazebo.
+Defaults remain display `:1`, resolution `1920x1080`, VNC `5900`, HTTP `8080`, and logs `/workspace/novnc-logs`. The script prints and saves the browser URL when a RunPod pod identifier is present. Authentication remains optional through `VNC_PASSWORD`.
 
-Defaults are display `:1`, resolution `1920x1080`, VNC `5900`, HTTP `8080`, and logs `/workspace/novnc-logs`. The browser URL is printed and saved to `novnc_url.txt` when a RunPod pod identifier is available; otherwise the script gives console instructions. VNC authentication is optional through `VNC_PASSWORD`.
+`stop.sh` uses its Isaac PID file and existing GUI/desktop process patterns. It does not stop pod billing. The original warning about preserving the container's main Isaac process remains documented. Historical image, GPU, and networking claims in `README.md`, `TEMPLATE.md`, and `POSTMORTEM.md` have not been freshly verified by the source restoration.
 
-`stop.sh` stops the desktop and launched application without stopping the pod. Stopping billing remains a RunPod console action. The historical container-main-process warning remains relevant when using the original Isaac image; do not turn it into a blanket statement about unrelated images.
-
-See [Gazebo decisions](gazebo.md) and [validation evidence](validation.md). Exact environment variables and launch commands are in the main [README](../../README.md).
+Restoration also retains original implementation details, including the unset-hostname fallback and colon-delimited desktop-stop patterns; fixes from the temporary combined project were not silently retained. See [validation](validation.md) and [migration](migration.md).

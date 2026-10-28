@@ -25,17 +25,6 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 log() { echo "[install] $*"; }
 die() { echo "[install] ERROR: $*" >&2; exit 1; }
 
-# Validate Gazebo before apt or any desktop changes. Isaac remains the default.
-case "${SIMULATOR:-isaac}" in
-    isaac) ;;
-    gazebo)
-        # shellcheck source=gazebo.sh
-        source "$DIR/gazebo.sh"
-        gazebo_select_platform
-        ;;
-    *) die "SIMULATOR must be isaac or gazebo." ;;
-esac
-
 # --- privilege check ------------------------------------------------------------
 # Some RunPod Isaac images run as the unprivileged 'isaac-sim' user, where
 # apt-get fails with "Permission denied". Use sudo when we're not root.
@@ -85,10 +74,6 @@ if [[ -f "$REQ" ]] && grep -qEv '^[[:space:]]*(#|$)' "$REQ"; then
     python3 -m pip install --quiet --no-input -r "$REQ" 2>/dev/null \
         || python3 -m pip install --quiet --no-input --break-system-packages -r "$REQ"
     log "Python packages installed."
-fi
-
-if [[ "${SIMULATOR:-isaac}" == gazebo ]]; then
-    gazebo_install
 fi
 
 log "Ready."

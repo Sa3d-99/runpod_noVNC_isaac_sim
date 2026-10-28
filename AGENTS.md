@@ -1,6 +1,6 @@
 # Project knowledge
 
-Read [docs/knowledge-base/README.md](docs/knowledge-base/README.md) before substantial investigation or implementation. It links the authored architecture, Gazebo decisions, and validation evidence.
+Read [docs/knowledge-base/README.md](docs/knowledge-base/README.md) before substantial investigation or implementation. It links the authored architecture, separation history, and validation evidence.
 
 - Graphify graph: `graphify-out/graph.json`; report: `graphify-out/GRAPH_REPORT.md`.
 - Local Obsidian vault: `graphify-out/obsidian/`; interactive graph: `graphify-out/graph.html`.
@@ -8,4 +8,4 @@ Read [docs/knowledge-base/README.md](docs/knowledge-base/README.md) before subst
 - Generated graphs and extraction caches are local and ignored by Git. Rebuild if absent; exclude dependencies, build output, generated vault exports, and secrets using `.graphifyignore`.
 - Keep durable notes in `docs/knowledge-base/`. Preserve authored notes when regenerating the vault, and incorporate these notes into it. The standing project workflow authorizes Obsidian export.
 
-The default simulator is Isaac Sim. Gazebo is an optional mode restricted to Ubuntu 22.04 / ROS Humble and Ubuntu 24.04 / ROS Jazzy. Preserve the shared desktop workflow and keep validation claims aligned with the recorded evidence.
+This project runs Isaac Sim. Its original runtime and README/TEMPLATE/requirements are restored from `cfdca8f`; Gazebo belongs to the separate `Gazebo_ROS2_Web_Simulation` repository. Preserve the original desktop workflow and keep validation claims aligned with the recorded evidence.
