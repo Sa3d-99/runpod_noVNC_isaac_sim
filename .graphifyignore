@@ -1,0 +1,13 @@
+graphify-out/
+.graphify/
+.git/
+node_modules/
+__pycache__/
+.venv/
+venv/
+build/
+dist/
+.env
+.env.*
+*.pem
+*.key

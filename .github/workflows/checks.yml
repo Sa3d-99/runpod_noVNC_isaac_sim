@@ -1,0 +1,16 @@
+name: Script checks
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  checks:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash syntax
+        run: bash -n bootstrap.sh install.sh novnc.sh gazebo.sh stop.sh
+      - name: Check compatibility and shutdown isolation
+        run: python3 -m unittest discover -s tests -v

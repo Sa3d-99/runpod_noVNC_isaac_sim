@@ -1,0 +1,5 @@
+# Local generated project knowledge graph and extraction caches.
+graphify-out/
+.graphify/
+__pycache__/
+*.py[cod]

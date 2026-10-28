@@ -3,7 +3,7 @@
 # stop.sh — shut down the noVNC desktop stack cleanly.
 #
 # Stops ONLY what novnc.sh started:
-#   the Isaac Sim GUI instance, websockify, x11vnc, fluxbox, Xvfb.
+#   the selected simulator GUI, websockify, x11vnc, fluxbox, Xvfb.
 #
 # It deliberately does NOT touch the headless Isaac Sim that the container
 # itself started (omni.isaac.sim.headless.*.kit). On the RunPod image that
@@ -28,6 +28,13 @@ log() { echo "[stop] $*"; }
 
 stopped_any=0
 
+# --- Gazebo (only the detached session novnc.sh recorded) -----------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$LOG_DIR/gazebo-gui.pid" && -f "$SCRIPT_DIR/gazebo.sh" ]]; then
+    LOG_DIR="$LOG_DIR" bash "$SCRIPT_DIR/gazebo.sh" stop
+    stopped_any=1
+fi
+
 # --- Isaac Sim GUI (only the instance novnc.sh launched) ------------------------
 if [[ -f "$LOG_DIR/isaac-gui.pid" ]]; then
     pid="$(cat "$LOG_DIR/isaac-gui.pid")"
@@ -47,13 +54,13 @@ fi
 
 # --- desktop stack ---------------------------------------------------------------
 for spec in \
-    "websockify --web=/usr/share/novnc ${WEB_PORT}:noVNC web server" \
-    "x11vnc -display ${DISPLAY_NUM}:VNC server" \
-    "fluxbox:window manager" \
-    "Xvfb ${DISPLAY_NUM}:virtual display"
+    "websockify --web=/usr/share/novnc ${WEB_PORT}|noVNC web server" \
+    "x11vnc -display ${DISPLAY_NUM}|VNC server" \
+    "fluxbox|window manager" \
+    "Xvfb ${DISPLAY_NUM}|virtual display"
 do
-    pat="${spec%%:*}"
-    name="${spec##*:}"
+    pat="${spec%%|*}"
+    name="${spec##*|}"
     if pgrep -f "$pat" >/dev/null 2>&1; then
         log "Stopping ${name}..."
         pkill -f "$pat" 2>/dev/null

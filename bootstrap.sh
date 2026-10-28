@@ -14,7 +14,8 @@
 #   bash -c "curl -fsSL https://raw.githubusercontent.com/Sa3d-99/runpod_noVNC_isaac_sim/main/bootstrap.sh | bash; sleep infinity"
 #
 # Env overrides are passed straight through to novnc.sh (WEB_PORT, RES,
-# VNC_PASSWORD, ...). Re-running is safe: it re-downloads and restarts cleanly.
+# VNC_PASSWORD, SIMULATOR=gazebo, ROS_DISTRO, ...).
+# Re-running is safe: it re-downloads and restarts cleanly.
 # =============================================================================
 set -euo pipefail
 

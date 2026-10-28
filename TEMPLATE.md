@@ -21,6 +21,11 @@ Everything above the line is notes for you, not for the template.
 > user with no sudo and a read-only `/usr`, so nothing can be installed and the
 > desktop cannot start.
 
+For a **Gazebo** pod, use Ubuntu 22.04 + ROS Humble or Ubuntu 24.04 + ROS Jazzy.
+The images, install commands and Gazebo Container Start Command are in the
+[README](README.md#choose-what-to-run). The published template and copyable
+Isaac description below remain for Isaac Sim.
+
 ---
 
 ## 📋 Template description (copy from here down)
